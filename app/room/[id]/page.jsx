@@ -82,7 +82,13 @@ export default function RoomPage({ params }) {
   // Fullscreen change listener
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+      const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      setIsFullscreen(active);
+      if (!active && typeof screen !== 'undefined' && screen.orientation && screen.orientation.unlock) {
+        try {
+          screen.orientation.unlock();
+        } catch {}
+      }
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -92,29 +98,54 @@ export default function RoomPage({ params }) {
     };
   }, []);
 
+  // Escape key listener for fullscreen exit
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        toggleFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
   const toggleFullscreen = () => {
     const elem = roomLayoutRef.current || videoContainerRef.current;
-    if (!elem) return;
+    const isCurrentlyFs = Boolean(
+      isFullscreen ||
+      (typeof document !== 'undefined' && (document.fullscreenElement || document.webkitFullscreenElement))
+    );
 
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      if (elem.requestFullscreen) {
-        elem.requestFullscreen().catch(() => {
-          setIsFullscreen((prev) => !prev);
-        });
-      } else if (elem.webkitRequestFullscreen) {
-        elem.webkitRequestFullscreen();
-      } else {
-        setIsFullscreen(true);
+    if (isCurrentlyFs) {
+      // EXIT FULLSCREEN (Küçült)
+      setIsFullscreen(false);
+      if (typeof document !== 'undefined') {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        }
+      }
+      if (typeof screen !== 'undefined' && screen.orientation && screen.orientation.unlock) {
+        try {
+          screen.orientation.unlock();
+        } catch {}
       }
     } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {
-          setIsFullscreen(false);
-        });
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen();
-      } else {
-        setIsFullscreen(false);
+      // ENTER FULLSCREEN (Tam Ekran)
+      setIsFullscreen(true);
+      if (elem) {
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen().catch(() => {});
+        } else if (elem.webkitRequestFullscreen) {
+          elem.webkitRequestFullscreen();
+        }
+      }
+      // Mobilde otomatik yana döndür (Landscape)
+      if (typeof screen !== 'undefined' && screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
       }
     }
   };

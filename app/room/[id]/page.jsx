@@ -808,7 +808,7 @@ export default function RoomPage({ params }) {
 
         {/* Sidebar: Chat & Participants */}
         <div className="room-sidebar">
-          <div className="sidebar-tabs">
+          <div className="sidebar-tabs" style={{ display: 'flex', alignItems: 'center' }}>
             <button
               className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
               onClick={() => setActiveTab('chat')}
@@ -821,6 +821,23 @@ export default function RoomPage({ params }) {
             >
               👥 Kişiler ({users.length})
             </button>
+            {isFullscreen && (
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                className="btn btn-secondary btn-sm"
+                title="Tam ekrandan çık (ESC)"
+                style={{
+                  marginRight: '0.4rem',
+                  padding: '0.2rem 0.5rem',
+                  minHeight: '28px',
+                  fontSize: '0.8rem',
+                  borderRadius: '6px',
+                }}
+              >
+                🗗 Küçült
+              </button>
+            )}
           </div>
 
           {/* Chat Tab */}

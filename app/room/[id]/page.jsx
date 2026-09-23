@@ -494,8 +494,21 @@ export default function RoomPage({ params }) {
           </div>
 
           {/* 16:9 Video Player Container */}
-          <div className="video-wrapper" ref={videoContainerRef}>
+          <div className="video-wrapper" ref={videoContainerRef} style={{ position: 'relative' }}>
             <div id="yt-player-target"></div>
+            {!isHost && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: 20,
+                  cursor: 'not-allowed',
+                  background: 'rgba(0, 0, 0, 0.001)',
+                }}
+                onClick={() => showNotification('Sadece oda sahibi videoyu kontrol edebilir 🔒')}
+                title="Sadece oda sahibi kontrol edebilir 🔒"
+              />
+            )}
           </div>
 
           {/* Player Sync Controls */}

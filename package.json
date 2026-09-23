@@ -1,0 +1,17 @@
+{
+  "name": "watch2gether",
+  "version": "1.0.0",
+  "description": "Real-time synchronized YouTube watch party with Next.js App Router, auth, chat and mobile webview support",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "next build",
+    "start": "NODE_ENV=production node server.js"
+  },
+  "dependencies": {
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "ws": "^8.21.3"
+  }
+}

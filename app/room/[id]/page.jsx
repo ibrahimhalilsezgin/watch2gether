@@ -53,6 +53,8 @@ export default function RoomPage({ params }) {
   const pendingStateRef = useRef(null);
   const chatBottomRef = useRef(null);
   const videoContainerRef = useRef(null);
+  const syncModeRef = useRef('ws');
+  const pollTimerRef = useRef(null);
 
   const showNotification = (msg) => {
     setToast(msg);
@@ -125,6 +127,9 @@ export default function RoomPage({ params }) {
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
+      }
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
       }
     };
   }, [roomId]);
@@ -219,20 +224,31 @@ export default function RoomPage({ params }) {
   };
 
   const sendAction = (action, time, videoId, reason = null) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (!isHost) {
       showNotification('Sadece oda sahibi videoyu kontrol edebilir 🔒');
       return;
     }
-    wsRef.current.send(
-      JSON.stringify({
-        type: 'action',
-        action,
-        time: typeof time === 'number' ? time : playerRef.current ? playerRef.current.getCurrentTime() : 0,
-        videoId,
-        reason,
-      })
-    );
+
+    const payload = {
+      action,
+      time: typeof time === 'number' ? time : playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0,
+      videoId,
+      reason,
+    };
+
+    if (syncModeRef.current === 'ws' && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'action', ...payload }));
+    } else {
+      const token = localStorage.getItem('w2g_token');
+      fetch(`/api/rooms/${roomId}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      }).catch(console.error);
+    }
   };
 
   const applyRoomState = (data) => {
@@ -284,80 +300,145 @@ export default function RoomPage({ params }) {
     }
   };
 
+  const startHttpPolling = (token) => {
+    if (pollTimerRef.current) return;
+    syncModeRef.current = 'http';
+    console.log('[Sync] HTTP Sync moduna geçildi (Serverless uyumlu).');
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/rooms/${roomId}/sync`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRoom(data.room);
+          setUsers(data.users || []);
+          if (data.messages) setMessages(data.messages);
+          if (data.videoId && data.videoId !== currentVideoIdRef.current) {
+            currentVideoIdRef.current = data.videoId;
+          }
+          applyRoomState(data);
+        }
+      } catch (err) {
+        // Sessizce sonraki döngüde tekrar dene
+      }
+    };
+
+    poll();
+    pollTimerRef.current = setInterval(poll, 1500);
+  };
+
   const initWebSocket = (token) => {
+    let wsConnected = false;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join', roomId, token }));
-    };
+      ws.onopen = () => {
+        wsConnected = true;
+        syncModeRef.current = 'ws';
+        ws.send(JSON.stringify({ type: 'join', roomId, token }));
+      };
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
 
-        if (msg.type === 'init') {
-          setRoom(msg.room);
-          setUsers(msg.users || []);
-          if (msg.messages) setMessages(msg.messages);
-          if (msg.videoId) currentVideoIdRef.current = msg.videoId;
-          applyRoomState(msg);
-        } else if (msg.type === 'sync') {
-          applyRoomState(msg);
-        } else if (msg.type === 'heartbeat') {
-          // Continuous sync: lockstep drift adjustment
-          if (playerRef.current && playerReadyRef.current) {
-            const targetTime = msg.time || 0;
-            const localTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
-            const drift = Math.abs(localTime - targetTime);
+          if (msg.type === 'init') {
+            setRoom(msg.room);
+            setUsers(msg.users || []);
+            if (msg.messages) setMessages(msg.messages);
+            if (msg.videoId) currentVideoIdRef.current = msg.videoId;
+            applyRoomState(msg);
+          } else if (msg.type === 'sync') {
+            applyRoomState(msg);
+          } else if (msg.type === 'heartbeat') {
+            // Continuous sync: lockstep drift adjustment
+            if (playerRef.current && playerReadyRef.current) {
+              const targetTime = msg.time || 0;
+              const localTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+              const drift = Math.abs(localTime - targetTime);
 
-            if (drift > 1.2) {
-              setRemoteFlag();
-              playerRef.current?.seekTo?.(targetTime, true);
-            }
-
-            if (msg.state === 'playing') {
-              const playerState = playerRef.current?.getPlayerState ? playerRef.current.getPlayerState() : -1;
-              if (playerState !== window.YT.PlayerState.PLAYING && playerState !== window.YT.PlayerState.BUFFERING) {
+              if (drift > 1.2) {
                 setRemoteFlag();
-                playerRef.current?.playVideo?.();
+                playerRef.current?.seekTo?.(targetTime, true);
+              }
+
+              if (msg.state === 'playing') {
+                const playerState = playerRef.current?.getPlayerState ? playerRef.current.getPlayerState() : -1;
+                if (playerState !== window.YT.PlayerState.PLAYING && playerState !== window.YT.PlayerState.BUFFERING) {
+                  setRemoteFlag();
+                  playerRef.current?.playVideo?.();
+                }
               }
             }
+          } else if (msg.type === 'chat') {
+            setMessages((prev) => [...prev, msg.message]);
+          } else if (msg.type === 'user_joined') {
+            setUsers(msg.users || []);
+            showNotification(`${msg.username} odaya katıldı`);
+          } else if (msg.type === 'user_left') {
+            setUsers(msg.users || []);
+            showNotification(`${msg.username} odadan ayrıldı`);
+          } else if (msg.type === 'error') {
+            showNotification(`Hata: ${msg.message}`);
           }
-        } else if (msg.type === 'chat') {
-          setMessages((prev) => [...prev, msg.message]);
-        } else if (msg.type === 'user_joined') {
-          setUsers(msg.users || []);
-          showNotification(`${msg.username} odaya katıldı`);
-        } else if (msg.type === 'user_left') {
-          setUsers(msg.users || []);
-          showNotification(`${msg.username} odadan ayrıldı`);
-        } else if (msg.type === 'error') {
-          showNotification(`Hata: ${msg.message}`);
+        } catch (err) {
+          console.error('WS parse error:', err);
         }
-      } catch (err) {
-        console.error('WS parse error:', err);
-      }
-    };
+      };
 
-    ws.onclose = () => {
-      // Reconnect if user still authenticated
-      const curToken = localStorage.getItem('w2g_token');
-      if (curToken) {
-        setTimeout(() => initWebSocket(curToken), 2000);
-      }
-    };
+      ws.onerror = () => {
+        if (!wsConnected) {
+          // Vercel serverless ortamında WS olmadığı için HTTP moduna geç
+          startHttpPolling(token);
+        }
+      };
+
+      ws.onclose = () => {
+        if (!wsConnected) {
+          startHttpPolling(token);
+        } else {
+          const curToken = localStorage.getItem('w2g_token');
+          if (curToken) {
+            setTimeout(() => initWebSocket(curToken), 2000);
+          }
+        }
+      };
+    } catch {
+      startHttpPolling(token);
+    }
   };
 
   const handleSendChat = (e) => {
     e.preventDefault();
     const text = chatInput.trim();
-    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!text) return;
 
-    wsRef.current.send(JSON.stringify({ type: 'chat', text }));
+    if (syncModeRef.current === 'ws' && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'chat', text }));
+    } else {
+      const token = localStorage.getItem('w2g_token');
+      fetch(`/api/rooms/${roomId}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ text })
+      }).then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.message) {
+            setMessages((prev) => [...prev, data.message]);
+          }
+        }
+      }).catch(console.error);
+    }
     setChatInput('');
   };
 

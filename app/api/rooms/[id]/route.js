@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 export async function GET(req, { params }) {
   try {
     const { id } = await params;
-    const room = db.getRoom(id);
+    const room = await db.getRoom(id);
     if (!room) {
       return NextResponse.json({ error: 'Oda bulunamadı' }, { status: 404 });
     }

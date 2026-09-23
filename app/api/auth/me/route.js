@@ -12,7 +12,7 @@ export async function GET(req) {
       token = req.cookies.get('w2g_token')?.value;
     }
 
-    const user = db.getUserByToken(token);
+    const user = await db.getUserByToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Giriş yapılmadı' }, { status: 401 });
     }

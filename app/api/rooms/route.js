@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 export async function GET() {
   try {
-    const rooms = db.getRooms();
+    const rooms = await db.getRooms();
     const roomsWithActivity = rooms.map(r => {
       const state = activeRooms.get(r.id);
       return {
@@ -30,13 +30,13 @@ export async function POST(req) {
       token = req.cookies.get('w2g_token')?.value;
     }
 
-    const user = db.getUserByToken(token);
+    const user = await db.getUserByToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Oda açmak için giriş yapmalısınız' }, { status: 401 });
     }
 
     const body = await req.json();
-    const room = db.createRoom(body.name, user.id);
+    const room = await db.createRoom(body.name, user.id);
     return NextResponse.json({ success: true, room }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 400 });

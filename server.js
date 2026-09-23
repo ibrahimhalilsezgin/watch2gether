@@ -1,4 +1,7 @@
 // server.js - Custom Next.js + WebSocket Server
+if (typeof process.loadEnvFile === 'function') {
+  try { process.loadEnvFile(); } catch {}
+}
 const { createServer } = require('node:http');
 const { parse } = require('node:url');
 const next = require('next');
@@ -38,19 +41,19 @@ app.prepare().then(() => {
       username: null,
     };
 
-    ws.on('message', (raw) => {
+    ws.on('message', async (raw) => {
       try {
         const data = JSON.parse(raw);
 
         // 1. Join Room
         if (data.type === 'join') {
           const { roomId, token } = data;
-          const user = db.getUserByToken(token);
+          const user = await db.getUserByToken(token);
           if (!user) {
             return ws.send(JSON.stringify({ type: 'error', message: 'Yetkisiz oturum' }));
           }
 
-          const roomMeta = db.getRoom(roomId);
+          const roomMeta = await db.getRoom(roomId);
           if (!roomMeta) {
             return ws.send(JSON.stringify({ type: 'error', message: 'Oda bulunamadı' }));
           }
@@ -89,7 +92,7 @@ app.prepare().then(() => {
 
         // 2. Playback Action: play, pause, seek, load (Sadece Oda Sahibi)
         if (data.type === 'action') {
-          const roomMeta = db.getRoom(clientInfo.roomId);
+          const roomMeta = await db.getRoom(clientInfo.roomId);
           if (roomMeta && clientInfo.username !== roomMeta.creator) {
             return ws.send(JSON.stringify({
               type: 'error',

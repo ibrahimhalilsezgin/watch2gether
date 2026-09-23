@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 export async function POST(req) {
   try {
     const { username, password } = await req.json();
-    const result = db.loginUser(username, password);
+    const result = await db.loginUser(username, password);
     const response = NextResponse.json({ success: true, ...result });
     response.cookies.set('w2g_token', result.token, { path: '/', maxAge: 60 * 60 * 24 * 30 });
     return response;

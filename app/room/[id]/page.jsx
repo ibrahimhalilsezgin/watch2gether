@@ -55,6 +55,7 @@ export default function RoomPage({ params }) {
   const videoContainerRef = useRef(null);
   const syncModeRef = useRef('ws');
   const pollTimerRef = useRef(null);
+  const lastReasonRef = useRef(null);
 
   const showNotification = (msg) => {
     setToast(msg);
@@ -170,9 +171,10 @@ export default function RoomPage({ params }) {
         container.appendChild(target);
       }
 
+      const initialVideo = pendingStateRef.current?.videoId || currentVideoIdRef.current || 'aqz-KE-bpKQ';
       try {
         new window.YT.Player('yt-player-target', {
-          videoId: currentVideoIdRef.current || 'aqz-KE-bpKQ',
+          videoId: initialVideo,
           playerVars: {
             autoplay: 0,
             controls: 1,
@@ -271,11 +273,17 @@ export default function RoomPage({ params }) {
     setRemoteFlag();
 
     if (data.reason) {
-      showNotification(`${data.reason} (${data.actor})`);
+      if (data.reason !== lastReasonRef.current) {
+        lastReasonRef.current = data.reason;
+        showNotification(`${data.reason} (${data.actor})`);
+      }
+    } else {
+      lastReasonRef.current = null;
     }
 
-    // Change video if different
-    if (data.videoId && data.videoId !== currentVideoIdRef.current) {
+    // Change video if different from current video ID or loaded YouTube iframe video
+    const activeYtId = playerRef.current?.getVideoData?.()?.video_id;
+    if (data.videoId && (data.videoId !== currentVideoIdRef.current || data.videoId !== activeYtId)) {
       currentVideoIdRef.current = data.videoId;
       playerRef.current?.loadVideoById?.(data.videoId, data.time || 0);
     }
@@ -326,9 +334,6 @@ export default function RoomPage({ params }) {
           setRoom(data.room);
           setUsers(data.users || []);
           if (data.messages) setMessages(data.messages);
-          if (data.videoId && data.videoId !== currentVideoIdRef.current) {
-            currentVideoIdRef.current = data.videoId;
-          }
           applyRoomState(data);
         }
       } catch (err) {

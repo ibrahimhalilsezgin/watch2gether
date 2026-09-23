@@ -34,6 +34,7 @@ export default function RoomPage({ params }) {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'users'
   const [syncStatus, setSyncStatus] = useState({ text: '00:00 (Hazır)', playing: false, actor: '' });
   const [toast, setToast] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const isHost = Boolean(user && room && user.username.toLowerCase() === room.creator.toLowerCase());
 
@@ -52,6 +53,7 @@ export default function RoomPage({ params }) {
   const currentVideoIdRef = useRef('aqz-KE-bpKQ');
   const pendingStateRef = useRef(null);
   const chatBottomRef = useRef(null);
+  const chatMessagesRef = useRef(null);
   const videoContainerRef = useRef(null);
   const syncModeRef = useRef('ws');
   const pollTimerRef = useRef(null);
@@ -71,10 +73,47 @@ export default function RoomPage({ params }) {
     }, duration);
   };
 
-  // Scroll chat
+  // Keep screen at top on load
   useEffect(() => {
-    if (activeTab === 'chat' && chatBottomRef.current) {
-      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    window.scrollTo(0, 0);
+  }, []);
+
+  // Fullscreen change listener
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const elem = videoContainerRef.current;
+    if (!elem) return;
+
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(() => {});
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  };
+
+  // Scroll chat within container without scrolling window
+  useEffect(() => {
+    if (activeTab === 'chat' && chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
     }
   }, [messages, activeTab]);
 
@@ -632,6 +671,14 @@ export default function RoomPage({ params }) {
           {/* 16:9 Video Player Container */}
           <div className="video-wrapper" ref={videoContainerRef} style={{ position: 'relative' }}>
             <div id="yt-player-target"></div>
+            <button
+              type="button"
+              className="video-fs-btn"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Tam ekrandan çık (ESC)' : 'Tam ekran'}
+            >
+              {isFullscreen ? '🗗' : '⛶'}
+            </button>
             {!isHost && (
               <div
                 style={{
@@ -668,6 +715,9 @@ export default function RoomPage({ params }) {
                 <button className="btn btn-accent btn-sm" onClick={forceSync} title="Herkesi eşitle">
                   ⚡ Eşitle
                 </button>
+                <button className="btn btn-secondary btn-sm" onClick={toggleFullscreen} title="Tam Ekran">
+                  {isFullscreen ? '🗗 Küçült' : '⛶ Tam Ekran'}
+                </button>
               </div>
             ) : (
               <div className="control-btn-group">
@@ -676,6 +726,9 @@ export default function RoomPage({ params }) {
                 </span>
                 <button className="btn btn-secondary btn-sm" onClick={forceSync} title="Odaya tekrar hizalan">
                   🔄 Eşitle
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={toggleFullscreen} title="Tam Ekran">
+                  {isFullscreen ? '🗗 Küçült' : '⛶ Tam Ekran'}
                 </button>
               </div>
             )}
@@ -717,7 +770,7 @@ export default function RoomPage({ params }) {
           {/* Chat Tab */}
           {activeTab === 'chat' && (
             <div className="chat-box">
-              <div className="chat-messages">
+              <div className="chat-messages" ref={chatMessagesRef}>
                 <div className="chat-msg" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                   Oda sohbeti başladı!
                 </div>

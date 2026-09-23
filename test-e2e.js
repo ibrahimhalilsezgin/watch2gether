@@ -77,6 +77,7 @@ async function test() {
     let syncPlayReceived = false;
     let hostPausedWhenMinimized = false;
     let heartbeatReceived = false;
+    let guestRejectedAction = false;
 
     wsHost.on('open', () => {
       wsHost.send(JSON.stringify({ type: 'join', roomId, token: dataA.token }));
@@ -91,6 +92,8 @@ async function test() {
       if (msg.type === 'init') {
         hostJoined = true;
         console.log('✓ Host joined via WebSocket');
+        // Host starts playback
+        wsHost.send(JSON.stringify({ type: 'action', action: 'play', time: 10.0 }));
       }
       if (msg.type === 'chat' && msg.message.text === 'selam') {
         chatReceived = true;
@@ -118,9 +121,14 @@ async function test() {
       if (msg.type === 'init') {
         guestJoined = true;
         console.log('✓ Guest joined via WebSocket');
-        // Guest sends chat and play action
+        // Guest sends chat
         wsGuest.send(JSON.stringify({ type: 'chat', text: 'selam' }));
-        wsGuest.send(JSON.stringify({ type: 'action', action: 'play', time: 45.0 }));
+        // Guest attempts unauthorized play action:
+        wsGuest.send(JSON.stringify({ type: 'action', action: 'play', time: 99.0 }));
+      }
+      if (msg.type === 'error' && msg.message.includes('Sadece oda sahibi')) {
+        guestRejectedAction = true;
+        console.log('✓ Guest action blocked by server ("Sadece oda sahibi")');
       }
       if (msg.type === 'sync' && msg.action === 'pause' && msg.reason === 'Oda sahibi sekmeyi alta aldı') {
         hostPausedWhenMinimized = true;
@@ -129,7 +137,7 @@ async function test() {
     });
 
     const interval = setInterval(() => {
-      if (chatReceived && syncPlayReceived && hostPausedWhenMinimized && heartbeatReceived) {
+      if (chatReceived && syncPlayReceived && hostPausedWhenMinimized && heartbeatReceived && guestRejectedAction) {
         clearInterval(interval);
         wsHost.close();
         wsGuest.close();

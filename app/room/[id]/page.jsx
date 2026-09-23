@@ -202,7 +202,12 @@ export default function RoomPage({ params }) {
     if (!playerReadyRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (isRemoteChangeRef.current) return;
 
-    const time = playerRef.current.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+    // Sadece oda sahibi video akışını değiştirebilir
+    if (!isHost) {
+      return;
+    }
+
+    const time = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
 
     if (event.data === window.YT.PlayerState.PLAYING) {
       sendAction('play', time);
@@ -215,6 +220,10 @@ export default function RoomPage({ params }) {
 
   const sendAction = (action, time, videoId, reason = null) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!isHost) {
+      showNotification('Sadece oda sahibi videoyu kontrol edebilir 🔒');
+      return;
+    }
     wsRef.current.send(
       JSON.stringify({
         type: 'action',
@@ -462,19 +471,26 @@ export default function RoomPage({ params }) {
         <div className="room-main">
           {/* Video Input Bar */}
           <div className="card" style={{ marginBottom: 0, padding: '0.6rem 0.8rem' }}>
-            <form onSubmit={handleVideoChange} className="input-group">
-              <input
-                type="text"
-                className="input"
-                placeholder="YouTube linki veya ID yapıştır (örn: https://youtu.be/...)"
-                style={{ fontSize: '0.88rem' }}
-                value={videoUrlInput}
-                onChange={(e) => setVideoUrlInput(e.target.value)}
-              />
-              <button type="submit" className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>
-                ▶ Yükle
-              </button>
-            </form>
+            {isHost ? (
+              <form onSubmit={handleVideoChange} className="input-group">
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="YouTube linki veya ID yapıştır (örn: https://youtu.be/...)"
+                  style={{ fontSize: '0.88rem' }}
+                  value={videoUrlInput}
+                  onChange={(e) => setVideoUrlInput(e.target.value)}
+                />
+                <button type="submit" className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>
+                  ▶ Yükle
+                </button>
+              </form>
+            ) : (
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0' }}>
+                <span>🔒</span>
+                <span>Video kontrolleri sadece oda sahibinde: <b style={{ color: 'var(--accent)' }}>{room ? room.creator : 'Oda Sahibi'}</b></span>
+              </div>
+            )}
           </div>
 
           {/* 16:9 Video Player Container */}
@@ -484,20 +500,31 @@ export default function RoomPage({ params }) {
 
           {/* Player Sync Controls */}
           <div className="player-controls">
-            <div className="control-btn-group">
-              <button className="btn btn-secondary btn-sm" onClick={togglePlayPause}>
-                ⏯ Oynat/Durdur
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => seekRelative(-10)} title="10s Geri">
-                ⏪ -10s
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => seekRelative(10)} title="10s İleri">
-                +10s ⏩
-              </button>
-              <button className="btn btn-accent btn-sm" onClick={forceSync} title="Herkesi eşitle">
-                ⚡ Eşitle
-              </button>
-            </div>
+            {isHost ? (
+              <div className="control-btn-group">
+                <button className="btn btn-secondary btn-sm" onClick={togglePlayPause}>
+                  ⏯ Oynat/Durdur
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => seekRelative(-10)} title="10s Geri">
+                  ⏪ -10s
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => seekRelative(10)} title="10s İleri">
+                  +10s ⏩
+                </button>
+                <button className="btn btn-accent btn-sm" onClick={forceSync} title="Herkesi eşitle">
+                  ⚡ Eşitle
+                </button>
+              </div>
+            ) : (
+              <div className="control-btn-group">
+                <span style={{ fontSize: '0.82rem', color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.6rem', background: 'rgba(210,153,34,0.1)', borderRadius: '6px' }}>
+                  🔒 Sadece oda sahibi ilerletebilir
+                </span>
+                <button className="btn btn-secondary btn-sm" onClick={forceSync} title="Odaya tekrar hizalan">
+                  🔄 Eşitle
+                </button>
+              </div>
+            )}
 
             <div className="sync-status">
               <span className={`status-dot ${syncStatus.playing ? '' : 'syncing'}`}></span>

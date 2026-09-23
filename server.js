@@ -87,8 +87,16 @@ app.prepare().then(() => {
         if (!clientInfo.roomId) return;
         const roomState = getOrCreateRoom(clientInfo.roomId);
 
-        // 2. Playback Action: play, pause, seek, load
+        // 2. Playback Action: play, pause, seek, load (Sadece Oda Sahibi)
         if (data.type === 'action') {
+          const roomMeta = db.getRoom(clientInfo.roomId);
+          if (roomMeta && clientInfo.username !== roomMeta.creator) {
+            return ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Sadece oda sahibi videoyu kontrol edebilir 🔒'
+            }));
+          }
+
           const { action, time, videoId } = data;
           const now = Date.now();
 

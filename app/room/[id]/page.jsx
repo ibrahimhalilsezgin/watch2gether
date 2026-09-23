@@ -56,6 +56,7 @@ export default function RoomPage({ params }) {
   const syncModeRef = useRef('ws');
   const pollTimerRef = useRef(null);
   const lastReasonRef = useRef(null);
+  const lastSeekTimeRef = useRef(0);
 
   const showNotification = (msg) => {
     setToast(msg);
@@ -288,29 +289,48 @@ export default function RoomPage({ params }) {
       playerRef.current?.loadVideoById?.(data.videoId, data.time || 0);
     }
 
-    // Calculate interpolated playback time
-    let targetTime = data.time || 0;
-    if (data.state === 'playing' && data.lastSync) {
-      const elapsed = (Date.now() - data.lastSync) / 1000;
-      targetTime += elapsed;
+    // Target playback time from server
+    const targetTime = typeof data.time === 'number' ? data.time : 0;
+    const localTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+
+    // HOST NEVER SEEKS FROM SYNC (Host is master clock)
+    if (isHost) {
+      setSyncStatus({
+        text: `${formatTime(localTime)} (${data.state === 'playing' ? 'Oynatılıyor' : 'Durduruldu'})`,
+        playing: data.state === 'playing',
+        actor: 'Sen (Host)',
+      });
+      return;
     }
 
-    const localTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+    // GUEST SYNC LOGIC
     const drift = Math.abs(localTime - targetTime);
+    const now = Date.now();
 
-    if (drift > 1.2) {
+    // Only hard-seek if drift is noticeable (> 3.5s) and throttled
+    if (drift > 3.5 && (now - lastSeekTimeRef.current > 5000)) {
+      lastSeekTimeRef.current = now;
+      setRemoteFlag(1500);
       playerRef.current?.seekTo?.(targetTime, true);
     }
 
     if (data.state === 'playing') {
-      playerRef.current?.playVideo?.();
+      const playerState = playerRef.current?.getPlayerState?.();
+      if (playerState !== window.YT.PlayerState.PLAYING && playerState !== window.YT.PlayerState.BUFFERING) {
+        setRemoteFlag(1500);
+        playerRef.current?.playVideo?.();
+      }
       setSyncStatus({
         text: `${formatTime(targetTime)} (Oynatılıyor)`,
         playing: true,
         actor: data.actor || '',
       });
     } else if (data.state === 'paused') {
-      playerRef.current?.pauseVideo?.();
+      const playerState = playerRef.current?.getPlayerState?.();
+      if (playerState === window.YT.PlayerState.PLAYING) {
+        setRemoteFlag(1500);
+        playerRef.current?.pauseVideo?.();
+      }
       setSyncStatus({
         text: `${formatTime(targetTime)} (Durduruldu)`,
         playing: false,
@@ -324,7 +344,17 @@ export default function RoomPage({ params }) {
     syncModeRef.current = 'http';
     console.log('[Sync] HTTP Sync moduna geçildi (Serverless uyumlu).');
 
+    let pollCount = 0;
     const poll = async () => {
+      pollCount++;
+      // Host oynatırken gerçek zaman damgasını her 3 poll'da bir (~4.5s) sunucuya günceller
+      if (isHost && playerRef.current?.getPlayerState?.() === window.YT.PlayerState.PLAYING) {
+        if (pollCount % 3 === 0) {
+          const curTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+          sendAction('ping', curTime);
+        }
+      }
+
       try {
         const res = await fetch(`/api/rooms/${roomId}/sync`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -373,21 +403,25 @@ export default function RoomPage({ params }) {
           } else if (msg.type === 'sync') {
             applyRoomState(msg);
           } else if (msg.type === 'heartbeat') {
-            // Continuous sync: lockstep drift adjustment
+            // Host asla heartbeat ile geriye/ileriye sarılmaz (Host master saattir)
+            if (isHost) return;
             if (playerRef.current && playerReadyRef.current) {
               const targetTime = msg.time || 0;
               const localTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
               const drift = Math.abs(localTime - targetTime);
+              const now = Date.now();
 
-              if (drift > 1.2) {
-                setRemoteFlag();
+              // Sadece 3.5s üzeri gerçek kaymalarda ve en fazla 5 saniyede bir sarma yap
+              if (drift > 3.5 && (now - lastSeekTimeRef.current > 5000)) {
+                lastSeekTimeRef.current = now;
+                setRemoteFlag(1500);
                 playerRef.current?.seekTo?.(targetTime, true);
               }
 
               if (msg.state === 'playing') {
                 const playerState = playerRef.current?.getPlayerState ? playerRef.current.getPlayerState() : -1;
                 if (playerState !== window.YT.PlayerState.PLAYING && playerState !== window.YT.PlayerState.BUFFERING) {
-                  setRemoteFlag();
+                  setRemoteFlag(1500);
                   playerRef.current?.playVideo?.();
                 }
               }

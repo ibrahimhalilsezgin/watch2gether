@@ -119,6 +119,10 @@ app.prepare().then(() => {
           } else if (action === 'seek') {
             roomState.time = typeof time === 'number' ? time : 0;
             roomState.lastSync = now;
+          } else if (action === 'ping') {
+            roomState.time = typeof time === 'number' ? time : roomState.time;
+            roomState.lastSync = now;
+            return;
           }
 
           // Broadcast to everyone in room

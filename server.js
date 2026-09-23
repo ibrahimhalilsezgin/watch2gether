@@ -191,7 +191,7 @@ app.prepare().then(() => {
         });
       }
     }
-  }, 2500);
+  }, 1000);
 
   server.listen(port, () => {
     console.log(`> Watch2Gether Next.js running on http://localhost:${port}`);

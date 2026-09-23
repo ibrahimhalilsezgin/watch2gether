@@ -307,10 +307,10 @@ export default function RoomPage({ params }) {
     const drift = Math.abs(localTime - targetTime);
     const now = Date.now();
 
-    // Only hard-seek if drift is noticeable (> 3.5s) and throttled
-    if (drift > 3.5 && (now - lastSeekTimeRef.current > 5000)) {
+    // Only hard-seek if drift is noticeable (> 0.8s) and throttled
+    if (drift > 0.8 && (now - lastSeekTimeRef.current > 2000)) {
       lastSeekTimeRef.current = now;
-      setRemoteFlag(1500);
+      setRemoteFlag(1000);
       playerRef.current?.seekTo?.(targetTime, true);
     }
 
@@ -347,9 +347,9 @@ export default function RoomPage({ params }) {
     let pollCount = 0;
     const poll = async () => {
       pollCount++;
-      // Host oynatırken gerçek zaman damgasını her 3 poll'da bir (~4.5s) sunucuya günceller
+      // Host oynatırken gerçek zaman damgasını her 2 poll'da bir (~2s) sunucuya günceller
       if (isHost && playerRef.current?.getPlayerState?.() === window.YT.PlayerState.PLAYING) {
-        if (pollCount % 3 === 0) {
+        if (pollCount % 2 === 0) {
           const curTime = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
           sendAction('ping', curTime);
         }
@@ -372,7 +372,7 @@ export default function RoomPage({ params }) {
     };
 
     poll();
-    pollTimerRef.current = setInterval(poll, 1500);
+    pollTimerRef.current = setInterval(poll, 1000);
   };
 
   const initWebSocket = (token) => {
@@ -411,10 +411,10 @@ export default function RoomPage({ params }) {
               const drift = Math.abs(localTime - targetTime);
               const now = Date.now();
 
-              // Sadece 3.5s üzeri gerçek kaymalarda ve en fazla 5 saniyede bir sarma yap
-              if (drift > 3.5 && (now - lastSeekTimeRef.current > 5000)) {
+              // Sadece 0.8s üzeri gerçek kaymalarda ve en fazla 2 saniyede bir sarma yap
+              if (drift > 0.8 && (now - lastSeekTimeRef.current > 2000)) {
                 lastSeekTimeRef.current = now;
-                setRemoteFlag(1500);
+                setRemoteFlag(1000);
                 playerRef.current?.seekTo?.(targetTime, true);
               }
 

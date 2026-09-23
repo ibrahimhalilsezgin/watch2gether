@@ -35,7 +35,7 @@ export default function RoomPage({ params }) {
   const [syncStatus, setSyncStatus] = useState({ text: '00:00 (Hazır)', playing: false, actor: '' });
   const [toast, setToast] = useState('');
 
-  const isHost = Boolean(user && room && user.username === room.creator);
+  const isHost = Boolean(user && room && user.username.toLowerCase() === room.creator.toLowerCase());
 
   // Auth modal for unauthenticated joiners
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -49,7 +49,7 @@ export default function RoomPage({ params }) {
   const wsRef = useRef(null);
   const isRemoteChangeRef = useRef(false);
   const remoteTimerRef = useRef(null);
-  const currentVideoIdRef = useRef('jfKfPfyJRdk');
+  const currentVideoIdRef = useRef('aqz-KE-bpKQ');
   const pendingStateRef = useRef(null);
   const chatBottomRef = useRef(null);
   const videoContainerRef = useRef(null);
@@ -99,6 +99,16 @@ export default function RoomPage({ params }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isHost]);
+
+  // Fetch room metadata immediately
+  useEffect(() => {
+    fetch(`/api/rooms/${roomId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.room) setRoom(data.room);
+      })
+      .catch(() => {});
+  }, [roomId]);
 
   // Auth Check
   useEffect(() => {
@@ -162,7 +172,7 @@ export default function RoomPage({ params }) {
 
       try {
         new window.YT.Player('yt-player-target', {
-          videoId: currentVideoIdRef.current || 'jfKfPfyJRdk',
+          videoId: currentVideoIdRef.current || 'aqz-KE-bpKQ',
           playerVars: {
             autoplay: 0,
             controls: 1,
@@ -170,6 +180,7 @@ export default function RoomPage({ params }) {
             modestbranding: 1,
             playsinline: 1,
             enablejsapi: 1,
+            origin: typeof window !== 'undefined' ? window.location.origin : undefined,
           },
           events: {
             onReady: (event) => {
@@ -449,6 +460,8 @@ export default function RoomPage({ params }) {
       showNotification('Geçersiz YouTube linki veya ID');
       return;
     }
+    currentVideoIdRef.current = id;
+    playerRef.current?.loadVideoById?.(id, 0);
     sendAction('load', 0, id);
     setVideoUrlInput('');
     showNotification('Video güncelleniyor...');
@@ -459,8 +472,10 @@ export default function RoomPage({ params }) {
     const state = playerRef.current?.getPlayerState ? playerRef.current.getPlayerState() : -1;
     const time = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
     if (state === window.YT.PlayerState.PLAYING) {
+      playerRef.current?.pauseVideo?.();
       sendAction('pause', time);
     } else {
+      playerRef.current?.playVideo?.();
       sendAction('play', time);
     }
   };
@@ -469,6 +484,7 @@ export default function RoomPage({ params }) {
     if (!playerRef.current || !playerReadyRef.current) return;
     const current = playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
     const target = Math.max(0, current + seconds);
+    playerRef.current?.seekTo?.(target, true);
     sendAction('seek', target);
   };
 
@@ -583,11 +599,16 @@ export default function RoomPage({ params }) {
                   position: 'absolute',
                   inset: 0,
                   zIndex: 20,
-                  cursor: 'not-allowed',
+                  cursor: 'pointer',
                   background: 'rgba(0, 0, 0, 0.001)',
                 }}
-                onClick={() => showNotification('Sadece oda sahibi videoyu kontrol edebilir 🔒')}
-                title="Sadece oda sahibi kontrol edebilir 🔒"
+                onClick={() => {
+                  if (playerRef.current) {
+                    playerRef.current?.playVideo?.();
+                  }
+                  showNotification('Video odayla senkronize (Kontrol oda sahibinde 🔒)');
+                }}
+                title="Odayla senkronize izleniyor"
               />
             )}
           </div>

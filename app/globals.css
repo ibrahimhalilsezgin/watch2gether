@@ -212,6 +212,78 @@ body {
   padding: 1rem;
 }
 
+/* Fullscreen Theater Mode (Video on Left, Chat on Right) */
+.room-layout:fullscreen,
+.room-layout:-webkit-full-screen,
+.room-layout.fullscreen-active {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-main);
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 1rem;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.room-layout:fullscreen .room-main,
+.room-layout:-webkit-full-screen .room-main,
+.room-layout.fullscreen-active .room-main {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.room-layout:fullscreen .video-input-card,
+.room-layout:-webkit-full-screen .video-input-card,
+.room-layout.fullscreen-active .video-input-card {
+  display: none !important;
+}
+
+.room-layout:fullscreen .video-wrapper,
+.room-layout:-webkit-full-screen .video-wrapper,
+.room-layout.fullscreen-active .video-wrapper {
+  flex: 1;
+  width: 100%;
+  padding-bottom: 0;
+  max-height: calc(100vh - 75px);
+  aspect-ratio: 16 / 9;
+  max-width: calc((100vh - 75px) * 16 / 9);
+  margin: auto;
+  position: relative;
+  background-color: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.room-layout:fullscreen .video-wrapper iframe,
+.room-layout:-webkit-full-screen .video-wrapper iframe,
+.room-layout:fullscreen .video-wrapper #yt-player-target,
+.room-layout:-webkit-full-screen .video-wrapper #yt-player-target,
+.room-layout.fullscreen-active .video-wrapper iframe,
+.room-layout.fullscreen-active .video-wrapper #yt-player-target {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.room-layout:fullscreen .room-sidebar,
+.room-layout:-webkit-full-screen .room-sidebar,
+.room-layout.fullscreen-active .room-sidebar {
+  height: 100%;
+  max-height: calc(100vh - 1.5rem);
+}
+
 .room-main {
   display: flex;
   flex-direction: column;
@@ -238,26 +310,6 @@ body {
   width: 100%;
   height: 100%;
   border: none;
-}
-
-.video-wrapper:fullscreen,
-.video-wrapper:-webkit-full-screen {
-  width: 100vw;
-  height: 100vh;
-  padding-bottom: 0;
-  border-radius: 0;
-  background-color: #000;
-}
-
-.video-wrapper:fullscreen iframe,
-.video-wrapper:-webkit-full-screen iframe,
-.video-wrapper:fullscreen #yt-player-target,
-.video-wrapper:-webkit-full-screen #yt-player-target {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
 }
 
 .video-fs-btn {

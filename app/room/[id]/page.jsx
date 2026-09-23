@@ -55,6 +55,7 @@ export default function RoomPage({ params }) {
   const chatBottomRef = useRef(null);
   const chatMessagesRef = useRef(null);
   const videoContainerRef = useRef(null);
+  const roomLayoutRef = useRef(null);
   const syncModeRef = useRef('ws');
   const pollTimerRef = useRef(null);
   const lastReasonRef = useRef(null);
@@ -92,20 +93,28 @@ export default function RoomPage({ params }) {
   }, []);
 
   const toggleFullscreen = () => {
-    const elem = videoContainerRef.current;
+    const elem = roomLayoutRef.current || videoContainerRef.current;
     if (!elem) return;
 
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
       if (elem.requestFullscreen) {
-        elem.requestFullscreen().catch(() => {});
+        elem.requestFullscreen().catch(() => {
+          setIsFullscreen((prev) => !prev);
+        });
       } else if (elem.webkitRequestFullscreen) {
         elem.webkitRequestFullscreen();
+      } else {
+        setIsFullscreen(true);
       }
     } else {
       if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(() => {
+          setIsFullscreen(false);
+        });
       } else if (document.webkitExitFullscreen) {
         document.webkitExitFullscreen();
+      } else {
+        setIsFullscreen(false);
       }
     }
   };
@@ -630,6 +639,9 @@ export default function RoomPage({ params }) {
           <button className="btn btn-secondary btn-sm" onClick={copyRoomLink} title="Oda linkini kopyala">
             📋 Paylaş
           </button>
+          <button className="btn btn-secondary btn-sm" onClick={toggleFullscreen} title="Tam Ekran Modu (Video + Sohbet)">
+            {isFullscreen ? '🗗 Küçült' : '⛶ Tam Ekran'}
+          </button>
           {user && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -641,11 +653,11 @@ export default function RoomPage({ params }) {
       </nav>
 
       {/* Main Room Grid */}
-      <div className="room-layout">
+      <div className={`room-layout ${isFullscreen ? 'fullscreen-active' : ''}`} ref={roomLayoutRef}>
         {/* Video & Controls Column */}
         <div className="room-main">
           {/* Video Input Bar */}
-          <div className="card" style={{ marginBottom: 0, padding: '0.6rem 0.8rem' }}>
+          <div className="card video-input-card" style={{ marginBottom: 0, padding: '0.6rem 0.8rem' }}>
             {isHost ? (
               <form onSubmit={handleVideoChange} className="input-group">
                 <input
@@ -669,13 +681,18 @@ export default function RoomPage({ params }) {
           </div>
 
           {/* 16:9 Video Player Container */}
-          <div className="video-wrapper" ref={videoContainerRef} style={{ position: 'relative' }}>
+          <div
+            className="video-wrapper"
+            ref={videoContainerRef}
+            onDoubleClick={toggleFullscreen}
+            style={{ position: 'relative' }}
+          >
             <div id="yt-player-target"></div>
             <button
               type="button"
               className="video-fs-btn"
               onClick={toggleFullscreen}
-              title={isFullscreen ? 'Tam ekrandan çık (ESC)' : 'Tam ekran'}
+              title={isFullscreen ? 'Tam ekrandan çık (ESC)' : 'Tam ekran (Çift tık)'}
             >
               {isFullscreen ? '🗗' : '⛶'}
             </button>
@@ -692,9 +709,13 @@ export default function RoomPage({ params }) {
                   if (playerRef.current) {
                     playerRef.current?.playVideo?.();
                   }
-                  showNotification('Video odayla senkronize (Kontrol oda sahibinde 🔒)');
+                  showNotification('Video odayla senkronize (Çift tık: Tam Ekran)');
                 }}
-                title="Odayla senkronize izleniyor"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  toggleFullscreen();
+                }}
+                title="Odayla senkronize izleniyor (Çift tık: Tam Ekran)"
               />
             )}
           </div>
@@ -715,37 +736,41 @@ export default function RoomPage({ params }) {
                 <button className="btn btn-accent btn-sm" onClick={forceSync} title="Herkesi eşitle">
                   ⚡ Eşitle
                 </button>
-                <button className="btn btn-secondary btn-sm" onClick={toggleFullscreen} title="Tam Ekran">
-                  {isFullscreen ? '🗗 Küçült' : '⛶ Tam Ekran'}
-                </button>
               </div>
             ) : (
               <div className="control-btn-group">
-                <span style={{ fontSize: '0.82rem', color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.6rem', background: 'rgba(210,153,34,0.1)', borderRadius: '6px' }}>
-                  🔒 Sadece oda sahibi ilerletebilir
-                </span>
                 <button className="btn btn-secondary btn-sm" onClick={forceSync} title="Odaya tekrar hizalan">
                   🔄 Eşitle
                 </button>
-                <button className="btn btn-secondary btn-sm" onClick={toggleFullscreen} title="Tam Ekran">
-                  {isFullscreen ? '🗗 Küçült' : '⛶ Tam Ekran'}
-                </button>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                  🔒 Oynatma oda sahibinde
+                </span>
               </div>
             )}
 
-            <div className="sync-status">
-              <span className={`status-dot ${syncStatus.playing ? '' : 'syncing'}`}></span>
-              <span>{syncStatus.text}</span>
-              {syncStatus.actor && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  · {syncStatus.actor}
-                </span>
-              )}
-              {isHost && (
-                <span style={{ fontSize: '0.72rem', color: 'var(--warning)', background: 'rgba(210,153,34,0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
-                  👑 Sekmeyi alta alırsan video herkes için durur
-                </span>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <div className="sync-status">
+                <span className={`status-dot ${syncStatus.playing ? '' : 'syncing'}`}></span>
+                <span>{syncStatus.text}</span>
+                {syncStatus.actor && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    · {syncStatus.actor}
+                  </span>
+                )}
+                {isHost && (
+                  <span style={{ fontSize: '0.72rem', color: 'var(--warning)', background: 'rgba(210,153,34,0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                    👑 Sekmeyi alta alırsan video durur
+                  </span>
+                )}
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={toggleFullscreen}
+                title="Tam Ekran (Video + Sohbet)"
+                style={{ fontWeight: 600 }}
+              >
+                {isFullscreen ? '🗗 Küçült' : '⛶ Tam Ekran'}
+              </button>
             </div>
           </div>
         </div>
